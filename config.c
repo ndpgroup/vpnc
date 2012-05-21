@@ -45,6 +45,7 @@ int opt_1des, opt_no_encryption, opt_auth_mode;
 enum natt_mode_enum opt_natt_mode;
 enum vendor_enum opt_vendor;
 enum if_mode_enum opt_if_mode;
+enum isakmp_ipsec_id_enum opt_id_type;
 uint16_t opt_udpencapport;
 
 static void log_to_stderr(int priority __attribute__((unused)), const char *format, ...)
@@ -195,6 +196,11 @@ static const char *config_def_pid_file(void)
 	return "/var/run/vpnc/pid";
 }
 
+static const char *config_def_id_type(void)
+{
+	return "0";
+}
+
 static const char *config_def_vendor(void)
 {
 	return "cisco";
@@ -233,6 +239,13 @@ static const struct config_names_s {
 		"<ASCII string>",
 		"your group name",
 		NULL
+	}, {
+		CONFIG_IPSEC_ID_TYPE, 1, 1,
+		"--id-type",
+		"IPSec IDType ",
+		"<ipv4/fqdn/user/key/#>",
+		"IKE Phase 1 Identification type",
+		config_def_id_type
 	}, {
 		CONFIG_IPSEC_SECRET, 1, 0,
 		NULL,
@@ -286,7 +299,7 @@ static const struct config_names_s {
 		CONFIG_VENDOR, 1, 1,
 		"--vendor",
 		"Vendor ",
-		"<cisco/netscreen>",
+		"<cisco/juniper/netscreen>",
 		"vendor of your IPSec gateway",
 		config_def_vendor
 	}, {
@@ -747,12 +760,32 @@ void do_config(int argc, char **argv)
 
 		if (!strcmp(config[CONFIG_VENDOR], "cisco")) {
 			opt_vendor = VENDOR_CISCO;
+		} else if (!strcmp(config[CONFIG_VENDOR], "juniper")) {
+			opt_vendor = VENDOR_JUNIPER;
 		} else if (!strcmp(config[CONFIG_VENDOR], "netscreen")) {
 			opt_vendor = VENDOR_NETSCREEN;
 		} else {
-			printf("%s: unknown vendor %s\nknown vendors: cisco netscreen\n", argv[0], config[CONFIG_VENDOR]);
+			printf("%s: unknown vendor %s\nknown vendors: cisco juniper netscreen\n", argv[0], config[CONFIG_VENDOR]);
 			exit(1);
 		}
+
+		if (!strcmp(config[CONFIG_IPSEC_ID_TYPE], "ipv4")) {
+			opt_id_type = ISAKMP_IPSEC_ID_IPV4_ADDR;
+		} else if (!strcmp(config[CONFIG_IPSEC_ID_TYPE], "fqdn")) {
+			opt_id_type = ISAKMP_IPSEC_ID_FQDN;
+		} else if (!strcmp(config[CONFIG_IPSEC_ID_TYPE], "user")) {
+			opt_id_type = ISAKMP_IPSEC_ID_FQDN;
+		} else if (!strcmp(config[CONFIG_IPSEC_ID_TYPE], "key")) {
+			opt_id_type = ISAKMP_IPSEC_ID_FQDN;
+		} else {
+			s = NULL;
+			opt_id_type = strtol(config[CONFIG_IPSEC_ID_TYPE], &s, 0);
+			if (s == NULL || *s != '\0') {
+				printf("%s: unknown IPSec ID type %s\n", argv[0], config[CONFIG_IPSEC_ID_TYPE]);
+				exit(1);
+			}
+		}
+
 	}
 
 	if (opt_debug >= 99) {

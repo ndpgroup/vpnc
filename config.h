@@ -46,6 +46,7 @@ enum config_enum {
 	CONFIG_IPSEC_GATEWAY,
 	CONFIG_IPSEC_TARGET_NETWORK,
 	CONFIG_IPSEC_ID,
+	CONFIG_IPSEC_ID_TYPE,
 	CONFIG_IPSEC_SECRET,
 	CONFIG_IPSEC_SECRET_OBF,
 	CONFIG_XAUTH_USERNAME,
@@ -70,6 +71,7 @@ enum hex_dump_enum {
 
 enum vendor_enum {
 	VENDOR_CISCO,
+	VENDOR_JUNIPER,
 	VENDOR_NETSCREEN
 };
 
@@ -101,6 +103,7 @@ extern int opt_nd;
 extern int opt_1des, opt_no_encryption, opt_auth_mode;
 extern enum natt_mode_enum opt_natt_mode;
 extern enum if_mode_enum opt_if_mode;
+extern enum isakmp_ipsec_id_enum opt_id_type;
 extern uint16_t opt_udpencapport;
 
 #define TIMESTAMP() ({				\

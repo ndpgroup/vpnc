@@ -1278,8 +1278,12 @@ static void do_phase1_am_packet1(struct sa_block *s, const char *key_id)
 		l = l->next->next;
 		l->next = new_isakmp_payload(ISAKMP_PAYLOAD_ID);
 		l = l->next;
-		if (opt_vendor == VENDOR_CISCO)
+		if (opt_id_type != ISAKMP_IPSEC_ID_RESERVED)
+			l->u.id.type = opt_id_type;
+		else if (opt_vendor == VENDOR_CISCO)
 			l->u.id.type = ISAKMP_IPSEC_ID_KEY_ID;
+		else if (opt_vendor == VENDOR_JUNIPER)
+			l->u.id.type = ISAKMP_IPSEC_ID_FQDN;
 		else
 			l->u.id.type = ISAKMP_IPSEC_ID_USER_FQDN;
 		l->u.id.protocol = IPPROTO_UDP;
@@ -2161,6 +2165,55 @@ static int do_phase2_notice_check(struct sa_block *s, struct isakmp_packet **r_p
 	return reject;
 }
 
+static int do_phase2_modeconfig_extra(struct sa_block *s, struct isakmp_packet **r, int sendonly)
+{
+	struct isakmp_attribute *a = (*r)->payload->next->u.modecfg.attributes;
+	int reject;
+
+	DEBUGTOP(2, printf("S5.5.1 do netscreen/juniper modecfg extra\n"));
+
+	do_config_to_env(s, a);
+
+	for (; a; a = a->next)
+		if(a->af == isakmp_attr_lots)
+			a->u.lots.length = 0;
+
+	(*r)->payload->next->u.modecfg.type = ISAKMP_MODECFG_CFG_ACK;
+	sendrecv_phase2(s, (*r)->payload->next, ISAKMP_EXCHANGE_MODECFG_TRANSACTION,
+		(*r)->message_id, sendonly, 0, 0, 0, 0);
+
+	reject = do_phase2_notice_check(s, r, NULL, 0);
+	return reject;
+}
+
+static int do_phase2_modeconfig_ack(struct sa_block *s, struct isakmp_packet **r, int sendonly)
+{
+	/* The final SET should have just one attribute.  */
+	struct isakmp_attribute *a = (*r)->payload->next->u.modecfg.attributes;
+	uint16_t set_result = 1;
+	int reject = -1;
+
+	if (a == NULL
+		|| a->type != ISAKMP_XAUTH_06_ATTRIB_STATUS
+		|| a->af != isakmp_attr_16 || a->next != NULL) {
+		reject = ISAKMP_N_INVALID_PAYLOAD_TYPE;
+		phase2_fatal(s, "xauth SET message rejected: %s(%d)", reject);
+	} else {
+		set_result = a->u.attr_16;
+	}
+
+	/* ACK the SET.  */
+	DEBUGTOP(2, printf("S5.7 send xauth ack\n"));
+	(*r)->payload->next->u.modecfg.type = ISAKMP_MODECFG_CFG_ACK;
+	sendrecv_phase2(s, (*r)->payload->next, ISAKMP_EXCHANGE_MODECFG_TRANSACTION,
+		(*r)->message_id, sendonly, 0, 0, 0, 0);
+
+	if (set_result == 0)
+		error(2, 0, "authentication unsuccessful");
+
+	return reject;
+}
+
 static int do_phase2_xauth(struct sa_block *s)
 {
 	struct isakmp_packet *r = NULL;
@@ -2346,56 +2399,33 @@ static int do_phase2_xauth(struct sa_block *s)
 
 	}
 
-	if ((opt_vendor == VENDOR_NETSCREEN) &&
+	if ((opt_vendor == VENDOR_JUNIPER) &&
 		(r->payload->next->u.modecfg.type == ISAKMP_MODECFG_CFG_SET)) {
-		struct isakmp_attribute *a = r->payload->next->u.modecfg.attributes;
-
-		DEBUGTOP(2, printf("S5.5.1 do netscreen modecfg extra\n"));
-
-		do_config_to_env(s, a);
-
-		for (; a; a = a->next)
-			if(a->af == isakmp_attr_lots)
-				a->u.lots.length = 0;
-
-		r->payload->next->u.modecfg.type = ISAKMP_MODECFG_CFG_ACK;
-		sendrecv_phase2(s, r->payload->next,
-			ISAKMP_EXCHANGE_MODECFG_TRANSACTION,
-			r->message_id, 0, 0, 0, 0, 0);
-
+		do_phase2_modeconfig_ack(s, &r, 0);
 		reject = do_phase2_notice_check(s, &r, NULL, 0);
-		if (reject == -1) {
-			free_isakmp_packet(r);
-			return 1;
+		if (reject != -1) {
+			DEBUGTOP(2, printf("S5.6 process xauth set (juniper)\n"));
+			reject = do_phase2_modeconfig_extra(s, &r, 1);
 		}
+	} else if ((opt_vendor == VENDOR_NETSCREEN) &&
+		(r->payload->next->u.modecfg.type == ISAKMP_MODECFG_CFG_SET)) {
+		reject = do_phase2_modeconfig_extra(s, &r, 0);
+		if (reject != -1) {
+			DEBUGTOP(2, printf("S5.6 process xauth set (netscreen)\n"));
+			do_phase2_modeconfig_ack(s, &r, 1);
+		}
+	} else {
+		DEBUGTOP(2, printf("S5.6 process xauth set\n"));
+		do_phase2_modeconfig_ack(s, &r, 1);
 	}
-
-	DEBUGTOP(2, printf("S5.6 process xauth set\n"));
-	{
-		/* The final SET should have just one attribute.  */
-		struct isakmp_attribute *a = r->payload->next->u.modecfg.attributes;
-		uint16_t set_result = 1;
-
-		if (a == NULL
-			|| a->type != ISAKMP_XAUTH_06_ATTRIB_STATUS
-			|| a->af != isakmp_attr_16 || a->next != NULL) {
-			reject = ISAKMP_N_INVALID_PAYLOAD_TYPE;
-			phase2_fatal(s, "xauth SET message rejected: %s(%d)", reject);
-		} else {
-			set_result = a->u.attr_16;
-		}
-
-		/* ACK the SET.  */
-		DEBUGTOP(2, printf("S5.7 send xauth ack\n"));
-		r->payload->next->u.modecfg.type = ISAKMP_MODECFG_CFG_ACK;
-		sendrecv_phase2(s, r->payload->next, ISAKMP_EXCHANGE_MODECFG_TRANSACTION,
-			r->message_id, 1, 0, 0, 0, 0);
+	if (r && r->payload)
 		r->payload->next = NULL; /* this part is already free()d by sendrecv_phase2 */
+	if (r)
 		free_isakmp_packet(r); /* this frees the received set packet (header+hash) */
 
-		if (set_result == 0)
-			error(2, 0, "authentication unsuccessful");
-	}
+	if (reject == -1)
+		return 1;
+
 	DEBUGTOP(2, printf("S5.8 xauth done\n"));
 	return 0;
 }
@@ -2771,6 +2801,9 @@ static void do_phase2_qm(struct sa_block *s)
 			ke = rp;
 			break;
 		case ISAKMP_PAYLOAD_NONCE:
+			nonce_r = rp;
+			break;
+		case ISAKMP_PAYLOAD_D:
 			nonce_r = rp;
 			break;
 

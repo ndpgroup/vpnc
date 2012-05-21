@@ -1,3 +1,13 @@
+* vpnc-0.5.4.tar.gz Sun May 20 21:19:37 MDT 2012
+
+  User visible changes:
+
+     * Add support for Juniper SRX Dynamic VPN
+         Based on patchset from Mikael Cam - Nateis
+         http://www.nateis.fr/vpnc/vpnc-0.5.3-to-0.5.4beta.patch
+     * Added explicit "IPSec IDType" option for IKE
+     * Tested with Cisco ASA and Juniper SRX210h (Junos 10.4R3.4)
+
 * vpnc-0.5.3.tar.gz Wed Nov 19 21:29:22 CET 2008
 
   User visible changes:

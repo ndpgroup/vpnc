@@ -396,7 +396,8 @@ extern const unsigned char VID_NATT_RFC[];
 
 /* Support for draft-ietf-ipsec-isakmp-mode-cfg-05.txt (yuk).  */
 enum isakmp_modecfg_cfg_enum {
-	ISAKMP_MODECFG_CFG_REQUEST = 1,
+	ISAKMP_MODECFG_CFG_RESERVED = 0,
+	ISAKMP_MODECFG_CFG_REQUEST,
 	ISAKMP_MODECFG_CFG_REPLY,
 	ISAKMP_MODECFG_CFG_SET,
 	ISAKMP_MODECFG_CFG_ACK
