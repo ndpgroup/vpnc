@@ -730,6 +730,8 @@ static void process_socket(struct sa_block *s)
 	} else if (eh->spi != s->ipsec.rx.spi) {
 		logmsg(LOG_NOTICE, "unknown spi %#08x from peer", ntohl(eh->spi));
 		return;
+	} else if (ntohl(eh->spi) < 256) {
+		syslog(LOG_NOTICE, "illegal spi %d from peer - continuing", ntohl(eh->spi));
 	}
 
 	/* Check auth digest and/or decrypt */
@@ -1049,7 +1051,12 @@ void vpnc_doit(struct sa_block *s)
 			setsid();
 		} else {
 			printf("VPNC started in background (pid: %d)...\n", (int)pid);
-			exit(0);
+			/*
+			 * Use _exit(), since exit() will call the handler
+			 * registered with atexit() that will remove the
+			 * route path to concentrator.
+			 */
+			_exit(0);
 		}
 		openlog("vpnc", LOG_PID | LOG_PERROR, LOG_DAEMON);
 		logmsg = syslog;

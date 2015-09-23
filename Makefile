@@ -60,16 +60,16 @@ BINSRCS = $(addsuffix .c,$(BINS))
 VERSION := $(shell sh mk-version)
 RELEASE_VERSION := $(shell cat VERSION)
 
-CC=gcc
+CC ?= gcc
 CFLAGS ?= -O3 -g
 CFLAGS += -W -Wall -Wmissing-declarations -Wwrite-strings
 CFLAGS +=  $(shell libgcrypt-config --cflags) $(CRYPTO_CFLAGS)
 CPPFLAGS += -DVERSION=\"$(VERSION)\"
 LDFLAGS ?= -g
-LDFLAGS += $(shell libgcrypt-config --libs) $(CRYPTO_LDADD)
+LIBS += $(shell libgcrypt-config --libs) $(CRYPTO_LDADD)
 
 ifeq ($(shell uname -s), SunOS)
-LDFLAGS += -lnsl -lresolv -lsocket
+LIBS += -lnsl -lresolv -lsocket
 endif
 ifneq (,$(findstring Apple,$(shell $(CC) --version)))
 # enabled in FSF GCC, disabled by default in Apple GCC
@@ -79,16 +79,16 @@ endif
 all : $(BINS) vpnc.8
 
 vpnc : $(OBJS) vpnc.o
-	$(CC) -o $@ $^ $(LDFLAGS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 vpnc.8 : vpnc.8.template makeman.pl vpnc
 	./makeman.pl
 
 cisco-decrypt : cisco-decrypt.o decrypt-utils.o
-	$(CC) -o $@ $^ $(LDFLAGS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 test-crypto : sysdep.o test-crypto.o crypto.o $(CRYPTO_OBJS)
-	$(CC) -o $@ $^ $(LDFLAGS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 .depend: $(SRCS) $(BINSRCS)
 	$(CC) -MM $(SRCS) $(BINSRCS) $(CFLAGS) $(CPPFLAGS) > $@
@@ -114,8 +114,8 @@ vpnc-%.tar.gz :
 	rm -rf vpnc-$*
 
 test : all
-	./test-crypto test/cert.pem test/cert0.pem test/cert1.pem test/cert2.pem test/root.pem
-	#./test-crypto test/cert.pem test/cert0.crt test/cert1.crt test/cert2.crt test/root.crt
+	./test-crypto test/sig_data.bin test/dec_data.bin test/ca_list.pem \
+		test/cert3.pem test/cert2.pem test/cert1.pem test/cert0.pem
 
 dist : VERSION vpnc.8 vpnc-$(RELEASE_VERSION).tar.gz
 

@@ -161,6 +161,10 @@ const struct vid_element vid_list[] = {
 static uint8_t r_packet[8192];
 static ssize_t r_length;
 
+static struct sa_block *s_atexit_sa;
+
+static void close_tunnel(struct sa_block *s);
+
 void print_vid(const unsigned char *vid, uint16_t len) {
 
 	int vid_index = 0;
@@ -373,11 +377,21 @@ static void setup_tunnel(struct sa_block *s)
 	}
 }
 
+static void atexit_close(void)
+{
+	if (s_atexit_sa != NULL) {
+		close_tunnel(s_atexit_sa);
+		s_atexit_sa = NULL;
+	}
+}
+
 static void config_tunnel(struct sa_block *s)
 {
 	setenv("VPNGATEWAY", inet_ntoa(s->dst), 1);
 	setenv("reason", "connect", 1);
 	system(config[CONFIG_SCRIPT]);
+	s_atexit_sa = s;
+	atexit(atexit_close);
 }
 
 static void close_tunnel(struct sa_block *s)
@@ -927,6 +941,7 @@ static int do_config_to_env(struct sa_block *s, struct isakmp_attribute *a)
 
 	unsetenv("CISCO_BANNER");
 	unsetenv("CISCO_DEF_DOMAIN");
+	unsetenv("CISCO_SPLIT_DNS");
 	unsetenv("CISCO_SPLIT_INC");
 	unsetenv("CISCO_IPV6_SPLIT_INC");
 	unsetenv("INTERNAL_IP4_NBNS");
@@ -1081,6 +1096,18 @@ static int do_config_to_env(struct sa_block *s, struct isakmp_attribute *a)
 				setenv(strbuf, strbuf2, 1);
 				free(strbuf); free(strbuf2);
 			}
+			break;
+
+		case ISAKMP_MODECFG_ATTRIB_CISCO_SPLIT_DNS:
+			if (a->af != isakmp_attr_lots) {
+				reject = ISAKMP_N_ATTRIBUTES_NOT_SUPPORTED;
+				break;
+			}
+			strbuf = xallocc(a->u.lots.length + 1);
+			memcpy(strbuf, a->u.lots.data, a->u.lots.length);
+			addenv("CISCO_SPLIT_DNS", strbuf);
+			free(strbuf);
+			DEBUG(2, printf("Split DNS: %s\n", a->u.lots.data));
 			break;
 
 		case ISAKMP_MODECFG_ATTRIB_CISCO_SAVE_PW:
@@ -2289,6 +2316,7 @@ static int do_phase2_xauth(struct sa_block *s)
 			case ISAKMP_XAUTH_06_ATTRIB_ANSWER:
 			case ISAKMP_XAUTH_06_ATTRIB_NEXT_PIN:
 			case ISAKMP_XAUTH_ATTRIB_CISCOEXT_VENDOR:
+			case ISAKMP_MODECFG_ATTRIB_CISCO_UNKNOWN_0X0015:
 				break;
 			case ISAKMP_XAUTH_06_ATTRIB_MESSAGE:
 				if (opt_debug || seen_answer || config[CONFIG_XAUTH_INTERACTIVE]) {
@@ -2319,6 +2347,7 @@ static int do_phase2_xauth(struct sa_block *s)
 
 			switch (ap->type) {
 			case ISAKMP_XAUTH_06_ATTRIB_TYPE:
+			case ISAKMP_MODECFG_ATTRIB_CISCO_UNKNOWN_0X0015:
 			{
 				na = new_isakmp_attribute_16(ap->type, ap->u.attr_16, NULL);
 				break;
@@ -2359,14 +2388,17 @@ static int do_phase2_xauth(struct sa_block *s)
 						(ap->type == ISAKMP_XAUTH_06_ATTRIB_USER_PASSWORD) ?
 						"Password" : "Passcode",
 						config[CONFIG_XAUTH_USERNAME], ntop_buf);
-					pass = getpass(prompt);
+					pass = vpnc_getpass(prompt);
 					free(prompt);
+					if (pass == NULL)
+						error(2, 0, "unable to get password");
 
 					na = new_isakmp_attribute(ap->type, NULL);
 					na->u.lots.length = strlen(pass);
 					na->u.lots.data = xallocc(na->u.lots.length);
 					memcpy(na->u.lots.data, pass, na->u.lots.length);
 					memset(pass, 0, na->u.lots.length);
+					free(pass);
 				} else {
 					na = new_isakmp_attribute(ap->type, NULL);
 					na->u.lots.length = strlen(config[CONFIG_XAUTH_PASSWORD]);
@@ -2460,6 +2492,7 @@ static int do_phase2_config(struct sa_block *s)
 	a->u.lots.data = xallocc(a->u.lots.length);
 	memcpy(a->u.lots.data, uts.nodename, a->u.lots.length);
 
+	a = new_isakmp_attribute(ISAKMP_MODECFG_ATTRIB_CISCO_SPLIT_DNS, a);
 	a = new_isakmp_attribute(ISAKMP_MODECFG_ATTRIB_CISCO_SPLIT_INC, a);
 	a = new_isakmp_attribute(ISAKMP_MODECFG_ATTRIB_CISCO_SAVE_PW, a);
 
@@ -2863,19 +2896,15 @@ static void do_phase2_qm(struct sa_block *s)
 #endif
 
 				s->esp_fd = socket(PF_INET, SOCK_RAW, IPPROTO_ESP);
-				if (s->esp_fd == -1) {
-					close_tunnel(s);
+				if (s->esp_fd == -1)
 					error(1, errno, "Couldn't open socket of ESP. Maybe something registered ESP already.\nPlease try '--natt-mode force-natt' or disable whatever is using ESP.\nsocket(PF_INET, SOCK_RAW, IPPROTO_ESP)");
-				}
 #ifdef FD_CLOEXEC
 				/* do not pass socket to vpnc-script, etc. */
 				fcntl(s->esp_fd, F_SETFD, FD_CLOEXEC);
 #endif
 #ifdef IP_HDRINCL
-				if (setsockopt(s->esp_fd, IPPROTO_IP, IP_HDRINCL, &hincl, sizeof(hincl)) == -1) {
-					close_tunnel(s);
+				if (setsockopt(s->esp_fd, IPPROTO_IP, IP_HDRINCL, &hincl, sizeof(hincl)) == -1)
 					error(1, errno, "setsockopt(esp_fd, IPPROTO_IP, IP_HDRINCL, 1)");
-				}
 #endif
 			}
 		}
@@ -3260,6 +3289,7 @@ int main(int argc, char **argv)
 	/* Cleanup routing */
 	DEBUGTOP(2, printf("S8 close_tunnel\n"));
 	close_tunnel(s);
+	s_atexit_sa = NULL;
 
 	/* Free resources */
 	DEBUGTOP(2, printf("S9 cleanup\n"));
