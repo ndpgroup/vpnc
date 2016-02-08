@@ -61,13 +61,14 @@ BINSRCS = $(addsuffix .c,$(BINS))
 VERSION ?= $(shell sh mk-version)
 RELEASE_VERSION := $(shell cat VERSION)
 
+LIBGCRYPT_CONFIG ?= libgcrypt-config
 CC ?= gcc
 CFLAGS ?= -O3 -g
 override CFLAGS += -W -Wall -Wmissing-declarations -Wwrite-strings
-override CFLAGS +=  $(shell libgcrypt-config --cflags) $(CRYPTO_CFLAGS)
+override CFLAGS +=  $(shell $(LIBGCRYPT_CONFIG) --cflags) $(CRYPTO_CFLAGS)
 override CPPFLAGS += -DVERSION=\"$(VERSION)\"
 LDFLAGS ?= -g
-LIBS += $(shell libgcrypt-config --libs) $(CRYPTO_LDADD)
+LIBS += $(shell $(LIBGCRYPT_CONFIG) --libs) $(CRYPTO_LDADD)
 
 ifeq ($(shell uname -s), SunOS)
 LIBS += -lnsl -lresolv -lsocket
