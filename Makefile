@@ -20,7 +20,7 @@
 # $Id$
 
 DESTDIR=
-PREFIX=/usr/local
+PREFIX?=/usr/local
 ETCDIR=/etc/vpnc
 BINDIR=$(PREFIX)/bin
 SBINDIR=$(PREFIX)/sbin
@@ -54,29 +54,31 @@ endif
 SRCS = sysdep.c vpnc-debug.c isakmp-pkt.c tunip.c config.c dh.c math_group.c supp.c decrypt-utils.c crypto.c $(CRYPTO_SRCS)
 BINS = vpnc cisco-decrypt test-crypto
 OBJS = $(addsuffix .o,$(basename $(SRCS)))
+MANS ?= vpnc.8
 CRYPTO_OBJS = $(addsuffix .o,$(basename $(CRYPTO_SRCS)))
 BINOBJS = $(addsuffix .o,$(BINS))
 BINSRCS = $(addsuffix .c,$(BINS))
-VERSION := $(shell sh mk-version)
+VERSION ?= $(shell sh mk-version)
 RELEASE_VERSION := $(shell cat VERSION)
 
+LIBGCRYPT_CONFIG ?= libgcrypt-config
 CC ?= gcc
 CFLAGS ?= -O3 -g
-CFLAGS += -W -Wall -Wmissing-declarations -Wwrite-strings
-CFLAGS +=  $(shell libgcrypt-config --cflags) $(CRYPTO_CFLAGS)
-CPPFLAGS += -DVERSION=\"$(VERSION)\"
+override CFLAGS += -W -Wall -Wmissing-declarations -Wwrite-strings
+override CFLAGS +=  $(shell $(LIBGCRYPT_CONFIG) --cflags) $(CRYPTO_CFLAGS)
+override CPPFLAGS += -DVERSION=\"$(VERSION)\"
 LDFLAGS ?= -g
-LIBS += $(shell libgcrypt-config --libs) $(CRYPTO_LDADD)
+LIBS += $(shell $(LIBGCRYPT_CONFIG) --libs) $(CRYPTO_LDADD)
 
 ifeq ($(shell uname -s), SunOS)
 LIBS += -lnsl -lresolv -lsocket
 endif
 ifneq (,$(findstring Apple,$(shell $(CC) --version)))
 # enabled in FSF GCC, disabled by default in Apple GCC
-CFLAGS += -fstrict-aliasing -freorder-blocks -fsched-interblock
+override CFLAGS += -fstrict-aliasing -freorder-blocks -fsched-interblock
 endif
 
-all : $(BINS) vpnc.8
+all : $(BINS) $(MANS)
 
 vpnc : $(OBJS) vpnc.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
@@ -136,7 +138,9 @@ install-common: all
 	install -m600 vpnc.conf $(DESTDIR)$(ETCDIR)/default.conf
 	install -m755 vpnc-disconnect $(DESTDIR)$(SBINDIR)
 	install -m755 pcf2vpnc $(DESTDIR)$(BINDIR)
+ifneq ($(MANS),)
 	install -m644 vpnc.8 $(DESTDIR)$(MANDIR)/man8
+endif
 	install -m644 pcf2vpnc.1 $(DESTDIR)$(MANDIR)/man1
 	install -m644 cisco-decrypt.1 $(DESTDIR)$(MANDIR)/man1
 	install -m644 COPYING $(DESTDIR)$(DOCDIR)

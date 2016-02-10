@@ -31,6 +31,7 @@
 #include <sys/types.h>
 #include <sys/utsname.h>
 #include <sys/wait.h>
+#include <sys/ttydefaults.h>
 
 #include <gcrypt.h>
 
@@ -670,8 +671,7 @@ static const struct config_names_s {
 static char *get_config_filename(const char *name, int add_dot_conf)
 {
 	char *realname;
-
-	asprintf(&realname, "%s%s%s", index(name, '/') ? "" : "/etc/vpnc/", name, add_dot_conf ? ".conf" : "");
+	asprintf(&realname, "%s%s%s", strchr(name, '/') ? "" : "/etc/vpnc/", name, add_dot_conf ? ".conf" : "");
 	return realname;
 }
 
