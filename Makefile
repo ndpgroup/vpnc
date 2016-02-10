@@ -57,7 +57,7 @@ OBJS = $(addsuffix .o,$(basename $(SRCS)))
 CRYPTO_OBJS = $(addsuffix .o,$(basename $(CRYPTO_SRCS)))
 BINOBJS = $(addsuffix .o,$(BINS))
 BINSRCS = $(addsuffix .c,$(BINS))
-VERSION := $(shell sh mk-version)
+VERSION ?= $(shell sh mk-version)
 RELEASE_VERSION := $(shell cat VERSION)
 
 CC ?= gcc
