@@ -58,13 +58,11 @@
 
 #if defined(__DragonFly__)
 #include <net/tun/if_tun.h>
-#elif defined(__linux__)
-#include <linux/if_tun.h>
 #elif defined(__APPLE__)
 /* no header for tun */
 #elif defined(__CYGWIN__)
 #include "tap-win32.h"
-#else
+#elif !defined(__linux__)
 #include <net/if_tun.h>
 #endif
 
