@@ -62,9 +62,9 @@ RELEASE_VERSION := $(shell cat VERSION)
 
 CC ?= gcc
 CFLAGS ?= -O3 -g
-CFLAGS += -W -Wall -Wmissing-declarations -Wwrite-strings
-CFLAGS +=  $(shell libgcrypt-config --cflags) $(CRYPTO_CFLAGS)
-CPPFLAGS += -DVERSION=\"$(VERSION)\"
+override CFLAGS += -W -Wall -Wmissing-declarations -Wwrite-strings
+override CFLAGS +=  $(shell libgcrypt-config --cflags) $(CRYPTO_CFLAGS)
+override CPPFLAGS += -DVERSION=\"$(VERSION)\"
 LDFLAGS ?= -g
 LIBS += $(shell libgcrypt-config --libs) $(CRYPTO_LDADD)
 
@@ -73,7 +73,7 @@ LIBS += -lnsl -lresolv -lsocket
 endif
 ifneq (,$(findstring Apple,$(shell $(CC) --version)))
 # enabled in FSF GCC, disabled by default in Apple GCC
-CFLAGS += -fstrict-aliasing -freorder-blocks -fsched-interblock
+override CFLAGS += -fstrict-aliasing -freorder-blocks -fsched-interblock
 endif
 
 all : $(BINS) vpnc.8
