@@ -31,6 +31,7 @@
 #include <sys/types.h>
 #include <sys/utsname.h>
 #include <sys/wait.h>
+#include <sys/ttydefaults.h>
 
 #include <gcrypt.h>
 
