@@ -143,7 +143,7 @@ static ssize_t vpnc_getline(char **lineptr, size_t *n, FILE *stream)
 			else
 				break;
 		}
-		if (llen == 0 && c == CEOT)
+		if (llen == 0 && c == 0x04)
 			goto eof_or_ceot;
 		if (c == '\n' || c == '\r')
 			break;
