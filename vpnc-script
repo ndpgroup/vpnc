@@ -30,6 +30,7 @@
 #* INTERNAL_IP4_NETMASKLEN      -- netmask length (often unset)
 #* INTERNAL_IP4_NETADDR         -- address of network (only present if netmask is set)
 #* INTERNAL_IP4_DNS             -- list of dns servers
+#* INTERNAL_DNS_SEARCH_DOMAIN   -- list of dns search domains to add
 #* INTERNAL_IP4_NBNS            -- list of wins servers
 #* INTERNAL_IP6_ADDRESS         -- IPv6 address
 #* INTERNAL_IP6_NETMASK         -- IPv6 netmask
@@ -676,6 +677,10 @@ do_connect() {
 	fi
 }
 
+add_additional_dns_search() {
+        sed -i "/search.*$INTERNAL_DNS_SEARCH_DOMAIN/! s/search.*/\0 $INTERNAL_DNS_SEARCH_DOMAIN" /etc/resolv.conf
+}
+
 do_disconnect() {
 	if [ -n "$CISCO_SPLIT_INC" ]; then
 		i=0
@@ -765,6 +770,7 @@ case "$reason" in
 	connect)
 		run_hooks connect
 		do_connect
+		add_additional_dns_search
 		run_hooks post-connect
 		;;
 	disconnect)
